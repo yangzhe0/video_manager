@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>视频管理</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-4 relative">
+  <div class="container mx-auto">
+    <h1 class="text-3xl font-bold mb-6 text-center">视频管理系统</h1>
+	<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6 overflow-visible" id="videoGrid"></div>
+  </div>
+
+  <!-- 分类标签浮动栏 -->
+	<div class="fixed right-2 top-20 w-16 bg-white shadow rounded p-2 text-sm z-50">
+	  <h2 class="font-semibold mb-2">分类</h2>
+	  <div id="categoryTags" class="space-y-1 text-blue-600 cursor-pointer break-words"></div>
+	</div>
+
+
+  <script>
+    let allVideos = [];
+    let currentCategory = null;
+
+    function formatSize(bytes) {
+      const units = ['B', 'KB', 'MB', 'GB'];
+      let size = bytes;
+      let index = 0;
+      while (size >= 1024 && index < units.length - 1) {
+        size /= 1024;
+        index++;
+      }
+      return size.toFixed(2) + ' ' + units[index];
+    }
+
+    function renderVideos(videos) {
+      const grid = document.getElementById('videoGrid');
+      grid.innerHTML = '';
+      videos.forEach(video => {
+        if (currentCategory && video.category !== currentCategory) return;
+
+        const nameWithoutCategory = video.name
+          .replace(video.category, '')
+          .replace(/^[-_\\s]+/, '')
+          .replace(/\\.[^/.]+$/, '')
+          .trim();
+
+        const card = document.createElement('div');
+        card.className = 'video-card bg-white rounded shadow overflow-visible flex flex-col';
+        card.setAttribute('data-thumb', video.thumbnail);
+
+        card.innerHTML = `
+          <div class="preview-container cursor-pointer h-[300px] bg-black rounded overflow-hidden" 
+               onclick="playVideo(this, '${video.path}', '${video.thumbnail}')">
+            <img src="${video.thumbnail ? `/static/${video.thumbnail}` : 'https://via.placeholder.com/320x400?text=No+Thumbnail'}" 
+                 class="object-cover w-full h-full">
+          </div>
+          <div class="p-3 flex flex-col flex-grow">
+            <div class="font-semibold text-sm truncate text-black">${nameWithoutCategory}</div>
+            <div class="text-xs text-red-500 font-medium">#${video.category} | ${formatSize(video.size)}</div>
+            <div class="mt-auto pt-2 flex gap-2 flex-wrap">
+              <button onclick="renameVideo('${video.path}', '${video.name}')" class="bg-yellow-500 text-white px-2 py-1 rounded text-xs">重命名</button>
+              <button onclick="deleteVideo('${video.path}')" class="bg-red-500 text-white px-2 py-1 rounded text-xs">删除</button>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function playVideo(container, path, thumb) {
+      const card = container.closest('.video-card');
+      const preview = card.querySelector('.preview-container');
+
+      const existingVideo = preview.querySelector('video');
+      if (existingVideo) {
+        const img = document.createElement('img');
+        img.src = `/static/${thumb}`;
+        img.className = 'object-cover w-full h-full';
+        preview.innerHTML = '';
+        preview.appendChild(img);
+        return;
+      }
+
+      // 关闭其他视频
+      document.querySelectorAll('.video-card').forEach(c => {
+        const pv = c.querySelector('.preview-container');
+        const vid = pv.querySelector('video');
+        const thumbPath = c.getAttribute('data-thumb');
+        if (vid && thumbPath) {
+          const img = document.createElement('img');
+          img.src = `/static/${thumbPath}`;
+          img.className = 'object-cover w-full h-full';
+          pv.innerHTML = '';
+          pv.appendChild(img);
+        }
+      });
+
+      const video = document.createElement('video');
+      video.src = `/static/${path}`;
+      video.controls = true;
+      video.autoplay = true;
+      video.className = 'w-auto h-full mx-auto';
+      preview.innerHTML = '';
+      preview.appendChild(video);
+    }
+
+    function renderTags(videos) {
+      const tagBox = document.getElementById('categoryTags');
+      const categories = [...new Set(videos.map(v => v.category))];
+      tagBox.innerHTML = '';
+
+      const allBtn = document.createElement('div');
+      allBtn.textContent = '#全部';
+      allBtn.onclick = () => {
+        currentCategory = null;
+        renderVideos(allVideos);
+      };
+      tagBox.appendChild(allBtn);
+
+      categories.forEach(cat => {
+        const tag = document.createElement('div');
+        tag.textContent = '#' + cat;
+        tag.onclick = () => {
+          currentCategory = cat;
+          renderVideos(allVideos);
+        };
+        tagBox.appendChild(tag);
+      });
+    }
+
+    function loadVideos() {
+      fetch('/api/videos')
+        .then(res => res.json())
+        .then(data => {
+          allVideos = data;
+          renderTags(data);
+          renderVideos(data);
+        });
+    }
+
+    function renameVideo(path, oldName) {
+      const base = oldName.replace(/\.[^/.]+$/, '');
+      const folder = path.split('/').slice(0, -1).join('/');
+      const newNameOnly = prompt('请输入新文件名（不含扩展名）:', base);
+      if (!newNameOnly || newNameOnly.trim() === base) return;
+
+      const newFullName = folder + '/' + newNameOnly.trim() + '.mp4';
+      fetch('/api/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldName: path, newName: newFullName })
+      }).then(() => loadVideos());
+    }
+
+    function deleteVideo(path) {
+      if (confirm('确定要删除此视频吗？')) {
+        fetch('/api/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: path })
+        }).then(() => loadVideos());
+      }
+    }
+
+    loadVideos();
+  </script>
+</body>
+</html>
