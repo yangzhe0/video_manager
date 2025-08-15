@@ -29,13 +29,13 @@ def list_videos():
                 has_thumb = os.path.exists(thumb_path)
 
                 rel_video_path = f"{folder}/{filename}"
-                rel_thumb_path = f"{folder}/{thumb_name}" if has_thumb else None
+                rel_thumb_path = f"{folder}/{thumb_name}" if has_thumb else rel_video_path # 这里的修改！
 
                 videos.append({
                     'name': filename,
                     'size': size,
                     'category': category,
-                    'thumbnail': rel_thumb_path,
+                    'thumbnail': rel_thumb_path, # 这里现在要么是 .png 路径，要么是 .mp4 路径
                     'path': rel_video_path
                 })
 
@@ -79,4 +79,4 @@ def open_folder():
     return jsonify({'success': True})
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()
