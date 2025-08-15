@@ -8,14 +8,13 @@
 <body class="bg-gray-100 p-4 relative">
   <div class="container mx-auto">
     <h1 class="text-3xl font-bold mb-6 text-center">视频管理系统</h1>
-	<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6 overflow-visible" id="videoGrid"></div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-4 overflow-visible" id="videoGrid"></div>
   </div>
 
-  <!-- 分类标签浮动栏 -->
-	<div class="fixed right-2 top-20 w-16 bg-white shadow rounded p-2 text-sm z-50">
-	  <h2 class="font-semibold mb-2">分类</h2>
-	  <div id="categoryTags" class="space-y-1 text-blue-600 cursor-pointer break-words"></div>
-	</div>
+  <div class="fixed right-2 top-20 w-16 bg-white shadow rounded p-2 text-sm z-50">
+    <h2 class="font-semibold mb-2">分类</h2>
+    <div id="categoryTags" class="space-y-1 text-blue-600 cursor-pointer break-words"></div>
+  </div>
 
 
   <script>
@@ -37,72 +36,66 @@
       const grid = document.getElementById('videoGrid');
       grid.innerHTML = '';
       videos.forEach(video => {
-        if (currentCategory && video.category !== currentCategory) return;
+          if (currentCategory && video.category !== currentCategory) return;
 
-        const nameWithoutCategory = video.name
-          .replace(video.category, '')
-          .replace(/^[-_\\s]+/, '')
-          .replace(/\\.[^/.]+$/, '')
-          .trim();
+          const nameWithoutCategory = video.name
+            .replace(video.category, '')
+            .replace(/^[-_\\s]+/, '')
+            .replace(/\.[^/.]+$/, '')
+            .trim();
 
-        const card = document.createElement('div');
-        card.className = 'video-card bg-white rounded shadow overflow-visible flex flex-col';
-        card.setAttribute('data-thumb', video.thumbnail);
+          const card = document.createElement('div');
+          card.className = 'video-card bg-white rounded shadow overflow-visible flex flex-col';
+          card.setAttribute('data-path', video.path);
 
-        card.innerHTML = `
-          <div class="preview-container cursor-pointer h-[300px] bg-black rounded overflow-hidden" 
-               onclick="playVideo(this, '${video.path}', '${video.thumbnail}')">
-            <img src="${video.thumbnail ? `/static/${video.thumbnail}` : 'https://via.placeholder.com/320x400?text=No+Thumbnail'}" 
-                 class="object-cover w-full h-full">
-          </div>
-          <div class="p-3 flex flex-col flex-grow">
-            <div class="font-semibold text-sm truncate text-black">${nameWithoutCategory}</div>
-            <div class="text-xs text-red-500 font-medium">#${video.category} | ${formatSize(video.size)}</div>
-            <div class="mt-auto pt-2 flex gap-2 flex-wrap">
-              <button onclick="renameVideo('${video.path}', '${video.name}')" class="bg-yellow-500 text-white px-2 py-1 rounded text-xs">重命名</button>
-              <button onclick="deleteVideo('${video.path}')" class="bg-red-500 text-white px-2 py-1 rounded text-xs">删除</button>
-            </div>
-          </div>
-        `;
-        grid.appendChild(card);
-      });
+          // 核心修改：初始只设置 poster，不设置 src，使用 object-cover
+          card.innerHTML = `
+              <div class="preview-container cursor-pointer h-[300px] bg-black rounded overflow-hidden" 
+                   onclick="playVideo(this)">
+                  <video poster="/static/${video.thumbnail}" preload="none" class="object-cover w-full h-full"></video>
+              </div>
+              <div class="p-3 flex flex-col flex-grow">
+                  <div class="font-semibold text-sm truncate text-black">${nameWithoutCategory}</div>
+                  <div class="text-xs text-red-500 font-medium">#${video.category} | ${formatSize(video.size)}</div>
+                  <div class="mt-auto pt-2 flex gap-2 flex-wrap">
+                      <button onclick="renameVideo('${video.path}', '${video.name}')" class="bg-yellow-500 text-white px-2 py-1 rounded text-xs">重命名</button>
+                      <button onclick="deleteVideo('${video.path}')" class="bg-red-500 text-white px-2 py-1 rounded text-xs">删除</button>
+                      <button onclick="copyFileName('${video.name}')" class="bg-blue-500 text-white px-2 py-1 rounded text-xs">复制</button>
+                  </div>
+              </div>
+          `;
+          grid.appendChild(card);
+        });
     }
 
-    function playVideo(container, path, thumb) {
+    function playVideo(container) {
       const card = container.closest('.video-card');
-      const preview = card.querySelector('.preview-container');
+      const videoElement = card.querySelector('video');
+      const videoPath = card.getAttribute('data-path');
 
-      const existingVideo = preview.querySelector('video');
-      if (existingVideo) {
-        const img = document.createElement('img');
-        img.src = `/static/${thumb}`;
-        img.className = 'object-cover w-full h-full';
-        preview.innerHTML = '';
-        preview.appendChild(img);
-        return;
+      // 如果视频没有 src，说明是第一次点击
+      if (!videoElement.src) {
+        const videoSrcWithTimestamp = `/static/${videoPath}#t=0.001`;
+        videoElement.src = videoSrcWithTimestamp;
+        videoElement.autoplay = true;
+        videoElement.controls = true;
       }
-
-      // 关闭其他视频
-      document.querySelectorAll('.video-card').forEach(c => {
-        const pv = c.querySelector('.preview-container');
-        const vid = pv.querySelector('video');
-        const thumbPath = c.getAttribute('data-thumb');
-        if (vid && thumbPath) {
-          const img = document.createElement('img');
-          img.src = `/static/${thumbPath}`;
-          img.className = 'object-cover w-full h-full';
-          pv.innerHTML = '';
-          pv.appendChild(img);
+      
+      // 停止所有其他视频
+      document.querySelectorAll('.video-card video').forEach(otherVideo => {
+        if (otherVideo !== videoElement && otherVideo.src) {
+          otherVideo.pause();
+          otherVideo.removeAttribute('controls');
         }
       });
-
-      const video = document.createElement('video');
-      video.src = `/static/${path}`;
-      video.controls = true;
-      video.autoplay = true;
-      video.className = 'w-auto h-full mx-auto';
-      preview.innerHTML = '';
-      preview.appendChild(video);
+      
+      // 播放或暂停当前视频
+      if (videoElement.paused) {
+        videoElement.play();
+      } else {
+        videoElement.pause();
+        videoElement.removeAttribute('controls');
+      }
     }
 
     function renderTags(videos) {
@@ -162,6 +155,29 @@
         }).then(() => loadVideos());
       }
     }
+    
+    // 复制文件名函数
+    function copyFileName(fileName) {
+      const nameWithoutExtension = fileName.replace(/\.[^/.]+$/, '');
+      const textToCopy = '#' + nameWithoutExtension;
+      window.prompt("请手动复制以下文本:", textToCopy);
+    }
+    
+    // 监听全屏模式变化，以处理视频裁剪问题
+    document.addEventListener('fullscreenchange', (event) => {
+        const videoElements = document.querySelectorAll('.video-card video');
+        videoElements.forEach(video => {
+            if (document.fullscreenElement === video) {
+                // 进入全屏模式，移除裁剪样式
+                video.classList.remove('object-cover');
+                video.classList.add('object-contain');
+            } else {
+                // 退出全屏模式，恢复裁剪样式
+                video.classList.add('object-cover');
+                video.classList.remove('object-contain');
+            }
+        });
+    });
 
     loadVideos();
   </script>
